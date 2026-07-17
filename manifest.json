@@ -1,0 +1,17 @@
+{
+  "name": "ApiDiario — Gestione Apiari",
+  "short_name": "ApiDiario",
+  "description": "Diario per la gestione di apiari e arnie: ispezioni vocali, trattamenti varroa, nutrizione, melari e produzione miele.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF3E3",
+  "theme_color": "#4A3421",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
