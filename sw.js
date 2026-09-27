@@ -1,7 +1,7 @@
 /* ApiDiario — service worker
    Se pubblichi una nuova versione dell'app, cambia il numero qui sotto
-   (es. apidiario-v4): forza l'aggiornamento della copia offline. */
-const CACHE = "apidiario-v3";
+   (es. apidiario-v6): forza l'aggiornamento della copia offline. */
+const CACHE = "apidiario-v5";
 const FILES = ["./", "./index.html", "./manifest.json",
                "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"];
 
