@@ -43,6 +43,7 @@ header h1{font-size:19px;font-weight:700;letter-spacing:.02em;flex:1;min-width:0
 header .eyebrow{display:block;font-size:11px;font-weight:600;letter-spacing:.14em;
   text-transform:uppercase;color:var(--miele);margin-bottom:1px}
 header .hbtn{font-size:18px;padding:6px;color:var(--cera);opacity:.9}
+header .hbtn.on{opacity:1;background:var(--miele);border-radius:8px}
 .comb{height:7px;background:
   repeating-linear-gradient(120deg,var(--miele) 0 8px,transparent 8px 16px),
   repeating-linear-gradient(60deg,var(--miele) 0 8px,transparent 8px 16px);opacity:.85}
@@ -196,6 +197,7 @@ details.reg .inner{border-top:1px solid var(--linea);padding:8px 0 14px}
 <header>
   <button class="back hidden" id="btnBack" aria-label="Indietro">‹</button>
   <h1 id="hTitle"><span class="eyebrow" id="hEyebrow">ApiDiario</span><span id="hName">I miei apiari</span></h1>
+  <button class="hbtn" id="btnWake" title="Schermo sempre acceso" aria-label="Schermo sempre acceso">💡</button>
   <button class="hbtn" id="btnBackup" title="Backup dati" aria-label="Backup dati">⛃</button>
 </header>
 <div class="comb"></div>
@@ -972,29 +974,53 @@ async function exportRegistro(ap,ar){
 
 /* ---------- DETTATURA VOCALE ---------- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let rec=null,recBtn=null;
+/* Registra una frase alla volta (continuous=false) e riparte da sola finché il
+   microfono è attivo. Così si evita il difetto di Android Chrome che, in modalità
+   continua, rimanda ogni volta tutta la frase accumulata creando ripetizioni. */
+let rec=null,recBtn=null,recTarget=null,recAttivo=false;
 function toggleRec(btn,target){
-  if(rec){stopRec();return;}
+  if(recAttivo){stopRec();return;}
   if(!SR){alert("La dettatura vocale non è disponibile in questo browser. Su Android usa Chrome. Puoi anche usare il microfono della tastiera Gboard.");return;}
-  rec=new SR();recBtn=btn;
-  rec.lang="it-IT";rec.continuous=true;rec.interimResults=true;
-  let base=target.value?target.value.replace(/\s+$/,"")+" ":"";
-  rec.onresult=e=>{
-    let interim="",finale="";
-    for(let i=0;i<e.results.length;i++){
-      const t=e.results[i][0].transcript;
-      if(e.results[i].isFinal)finale+=t; else interim+=t;
-    }
-    target.value=base+finale+interim;
-  };
-  rec.onerror=ev=>{
-    stopRec();
-    if(ev.error==="not-allowed")alert("Permesso microfono negato. Consenti il microfono nelle impostazioni del sito.");
-  };
-  rec.onend=()=>{if(recBtn)recBtn.classList.remove("rec");rec=null;recBtn=null;};
-  try{rec.start();btn.classList.add("rec");}catch(e){rec=null;}
+  recAttivo=true;recBtn=btn;recTarget=target;
+  btn.classList.add("rec");
+  avviaSessione();
 }
-function stopRec(){if(rec){try{rec.stop();}catch(e){}}}
+function avviaSessione(){
+  if(!recAttivo||!recTarget||!document.body.contains(recTarget)){fineRec();return;}
+  const target=recTarget;
+  const base=target.value.trim()?target.value.replace(/\s+$/,"")+" ":"";
+  const r=new SR();rec=r;
+  r.lang="it-IT";r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
+  r.onresult=e=>{
+    if(!document.body.contains(target))return;
+    /* l'ultimo risultato contiene già la frase completa di questa sessione */
+    const t=e.results[e.results.length-1][0].transcript.trim();
+    target.value=base+t;
+  };
+  r.onerror=ev=>{
+    if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){
+      recAttivo=false;
+      alert("Permesso microfono negato. Consenti il microfono nelle impostazioni dell'app.");
+    }
+    /* "no-speech" e "aborted" sono normali pause: la sessione riparte da onend */
+  };
+  r.onend=()=>{
+    if(rec===r)rec=null;
+    if(recAttivo)setTimeout(avviaSessione,120); else fineRec();
+  };
+  try{r.start();}catch(e){fineRec();}
+}
+function fineRec(){
+  recAttivo=false;
+  if(recBtn)recBtn.classList.remove("rec");
+  recBtn=null;recTarget=null;rec=null;
+}
+function stopRec(){
+  /* stop() lascia arrivare l'ultimo pezzo di frase, poi onend chiude tutto */
+  recAttivo=false;
+  if(recBtn)recBtn.classList.remove("rec");
+  if(rec){try{rec.stop();}catch(e){fineRec();}} else fineRec();
+}
 
 /* ---------- MODALI ---------- */
 function openModal(html){
@@ -1135,6 +1161,39 @@ function chipActionModal(entry,contesto,onRemove){
   $("#mRem").addEventListener("click",()=>{onRemove();closeModal();save();render();});
   $("#mCancel").addEventListener("click",closeModal);
 }
+
+/* ---------- SCHERMO SEMPRE ACCESO ---------- */
+let wakeLock=null, wakeVoluto=false;
+const btnWake=$("#btnWake");
+async function attivaWake(){
+  if(!("wakeLock" in navigator)){
+    alert("Il tuo telefono/browser non supporta lo schermo sempre acceso da qui. In alternativa puoi disattivare lo spegnimento automatico dello schermo dalle Impostazioni display di Android mentre usi l'app.");
+    return;
+  }
+  try{
+    wakeLock=await navigator.wakeLock.request("screen");
+    wakeVoluto=true;
+    btnWake.classList.add("on");
+    wakeLock.addEventListener("release",()=>{
+      /* il sistema può rilasciarlo da solo (es. app in background): se l'utente lo voleva ancora attivo,
+         lo segnaliamo come spento finché non torna in primo piano, dove lo riattiviamo in automatico */
+      btnWake.classList.remove("on");
+    });
+  }catch(e){
+    alert("Non è stato possibile mantenere lo schermo acceso: "+e.message);
+  }
+}
+async function disattivaWake(){
+  wakeVoluto=false;
+  if(wakeLock){try{await wakeLock.release();}catch(e){}wakeLock=null;}
+  btnWake.classList.remove("on");
+}
+btnWake.addEventListener("click",()=>{
+  if(wakeLock)disattivaWake(); else attivaWake();
+});
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"&&wakeVoluto&&!wakeLock)attivaWake();
+});
 
 /* ---------- BACKUP / RIPRISTINO ---------- */
 $("#btnBackup").addEventListener("click",()=>{
